@@ -4,7 +4,9 @@ void UStatWidget::SetStatComponent(UStatComponent* OwnerStatComponent)
 {
 	StatReference = OwnerStatComponent;
 
-	//StatReference->OnStatUpdated.AddUObject(this, &UStatWidget::RefreshStatWidget);
+	StatReference->OnStatUpdated.AddUObject(this, &UStatWidget::RefreshStatWidget);
+	
+	RefreshStatWidget();
 }
 
 void UStatWidget::RefreshStatWidget()

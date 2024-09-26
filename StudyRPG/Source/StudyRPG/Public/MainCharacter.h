@@ -50,7 +50,7 @@ public:
 	// 카메라 붐 반환
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return cameraBoom; }
 	// 카메라 반환
-	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return followCamera; }
+	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return tpsCamera; }
 
 	FORCEINLINE bool IsInteracting() const { return GetWorldTimerManager().IsTimerActive(TimerHandle_Interaction); };
 
@@ -79,6 +79,8 @@ public:
 
 	void CharacterTakeDamage(float damage);
 
+	void SetWeapon(UStaticMesh* weaponMesh);
+
 protected:
 
 	UPROPERTY()
@@ -90,7 +92,7 @@ protected:
 
 	// 캐릭터를 따라다니는 카메라
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	UCameraComponent* followCamera;
+	UCameraComponent* tpsCamera;
 
 	// 1인칭 시점 카메라
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
@@ -99,11 +101,16 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Character | Interaction")
 	TScriptInterface<IInteractionInterface> targetInteractable;
 
+	// 인벤토리
 	UPROPERTY(VisibleAnywhere, Category = "Character | Inventory")
 	UInventoryComponent* PlayerInventory;
 
+	// 스탯
 	UPROPERTY(VisibleAnywhere, Category = "Character | Stat")
 	UStatComponent* PlayerStatComponent;
+
+	UPROPERTY(VisibleAnywhere, Category = "Character | Weapon")
+	UStaticMeshComponent* WeaponMesh;
 
 	float interactionCheckFrequency;
 	float interactionCheckDistance;
@@ -111,9 +118,9 @@ protected:
 	FInteractionData InteractionData;
 
 	UPROPERTY(VisibleAnyWhere, Category = "Character | Camera")
-	FVector DefaultCameraLocation;
+	FVector TPSCameraLocation;
 	UPROPERTY(VisibleAnyWhere, Category = "Character | Camera")
-	FVector AimingCameraLocation;
+	FVector FPSCameraLocation;
 
 	TObjectPtr<UTimelineComponent> AimingCameraTimeline;
 
@@ -135,6 +142,7 @@ protected:
 	void Look(const FInputActionValue& Value);
 
 	void Aim();
+	void Aiming();
 	void StopAiming();
 	UFUNCTION()
 	void UpdateCameraTimeline(const float TimelineValue) const;

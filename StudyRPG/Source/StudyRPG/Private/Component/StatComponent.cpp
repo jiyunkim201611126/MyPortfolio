@@ -34,6 +34,4 @@ float UStatComponent::TakeDamage(float damage)
 void UStatComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	//OnStatUpdated.Broadcast();
 }
