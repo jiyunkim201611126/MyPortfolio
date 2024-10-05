@@ -54,22 +54,21 @@ AMainCharacter::AMainCharacter()
 	// 카메라 붐 생성, RootComponent에 붙임
 	cameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("cameraBoom"));
 	cameraBoom->SetupAttachment(RootComponent);
-	cameraBoom->SetRelativeLocation(FVector{ 0.f, 0.f, 70.f });
+	cameraBoom->SetRelativeLocation(FVector{ 0.f, 0.f, 75.f });
 	cameraBoom->TargetArmLength = 300.0f; // 카메라와 캐릭터의 거리
 	cameraBoom->bUsePawnControlRotation = true;
+	cameraBoom->SocketOffset = FVector{ 0.0f, 50.0f, 0.0f };
 
 	// 카메라 생성
 	tpsCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("tpsCamera"));
 	tpsCamera->SetupAttachment(cameraBoom, USpringArmComponent::SocketName); // 카메라 붐에 붙임
 	tpsCamera->bUsePawnControlRotation = true;
-	tpsCamera->SetActive(true);
 
 	fpsCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("fpsCamera"));
 	fpsCamera->SetupAttachment(GetMesh(), FName("head"));
 	fpsCamera->bUsePawnControlRotation = true; // 1인칭이 되면 카메라 따라 캐릭터가 회전해야 함
 	fpsCamera->SetRelativeRotation(FRotator{ 0.f, 90.f, -90.f });
 	fpsCamera->SetRelativeLocation(FVector{ 3.f, 12.f, 0.f });
-	fpsCamera->SetActive(false);
 
 	// 위젯 컴포넌트 생성
 	nameTagWidgetComponent = CreateDefaultSubobject<UNameTagWidgetComponent>(TEXT("nameTag"));
@@ -89,11 +88,6 @@ AMainCharacter::AMainCharacter()
 	// 상호작용 인스턴스 검출 주기와 거리
 	interactionCheckFrequency = 0.1;
 	interactionCheckDistance = 225.0f;
-
-	AimingCameraTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("AimingCameraTimeline"));
-	TPSCameraLocation = FVector{ 0.0f, 50.0f, 0.0f };
-	FPSCameraLocation = FVector{ 300.0f, 0.0f, 0.0f };
-	cameraBoom->SocketOffset = TPSCameraLocation;
 }
 
 void AMainCharacter::ChangePlayerNameTag(FText name)
@@ -136,8 +130,7 @@ void AMainCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		EnhancedInputComponent->BindAction(lookAction, ETriggerEvent::Triggered, this, &AMainCharacter::Look);
 
 		// 1인칭 전환
-		EnhancedInputComponent->BindAction(aim, ETriggerEvent::Started, this, &AMainCharacter::Aiming);
-		EnhancedInputComponent->BindAction(aim, ETriggerEvent::Completed, this, &AMainCharacter::StopAiming);
+		EnhancedInputComponent->BindAction(aim, ETriggerEvent::Started, this, &AMainCharacter::Aim);
 
 		// 상호작용
 		EnhancedInputComponent->BindAction(interactAction, ETriggerEvent::Started, this, &AMainCharacter::BeginInteract);
@@ -157,6 +150,8 @@ void AMainCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	fpsCamera->SetActive(false);
+
 	Inventory->GenerateNullItems();
 	Inventory->SetStartInventory();
 
@@ -165,17 +160,6 @@ void AMainCharacter::BeginPlay()
 	HUD->SetPlayerInventory(Inventory);
 
 	HUD->SetPlayerStatComponent(PlayerStatComponent);
-
-	FOnTimelineFloat AimLerpAlphaValue;
-	FOnTimelineEvent TimelineFinishedEvent;
-	AimLerpAlphaValue.BindUFunction(this, FName("UpdateCameraTimeline"));
-	TimelineFinishedEvent.BindUFunction(this, FName("CameraTimelineEnd"));
-
-	if (AimingCameraTimeline && AimingCameraCurve)
-	{
-		AimingCameraTimeline->AddInterpFloat(AimingCameraCurve, AimLerpAlphaValue);
-		AimingCameraTimeline->SetTimelineFinishedFunc(TimelineFinishedEvent);
-	}
 }
 
 void AMainCharacter::Move(const FInputActionValue& Value)
@@ -224,8 +208,40 @@ void AMainCharacter::Look(const FInputActionValue& Value)
 	}
 }
 
+void AMainCharacter::InterpolateCameraRotation(UCameraComponent* FromCamera, UCameraComponent* ToCamera)
+{
+	FVector TraceStart{ FVector::ZeroVector };
+	FVector TraceEnd{ FVector::ZeroVector };
+	float Distance = 1000.f;
+
+	TraceStart = FromCamera->GetComponentLocation();
+	TraceEnd = { TraceStart + (FromCamera->GetComponentRotation().Vector() * Distance) };
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+	FHitResult TraceHit;
+
+	if (GetWorld()->LineTraceSingleByChannel(TraceHit, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+	{
+		// 스칼라곱을 이용한 카메라 보간 정도 구하기
+		FVector Direction = (TraceHit.ImpactPoint - ToCamera->GetComponentLocation());
+		FRotator NewRotation = Direction.Rotation();
+
+		Controller->SetControlRotation(NewRotation);
+	}
+	else
+	{
+		// 카메라 보간 필요 없는 경우
+		return;
+	}
+}
+
 void AMainCharacter::Aim()
 {
+	if (bAiming)
+		StopAiming();
+	else
+		Aiming();
 }
 
 void AMainCharacter::Aiming()
@@ -236,60 +252,29 @@ void AMainCharacter::Aiming()
 		bUseControllerRotationYaw = true;
 		GetCharacterMovement()->MaxWalkSpeed = PlayerStatComponent->GetAimingWalkSpeed();
 
-		if (AimingCameraTimeline)
-		{
-			AimingCameraTimeline->PlayFromStart();
-		}
+		fpsCamera->Activate();
+		tpsCamera->Deactivate();
+
+		InterpolateCameraRotation(tpsCamera, fpsCamera);
 	}
 }
 
 void AMainCharacter::StopAiming()
 {
-	if (bAiming)
-	{
-		bAiming = false;
+	bAiming = false;
+	if (!bWeaponEquip)
 		bUseControllerRotationYaw = false;
-		GetCharacterMovement()->MaxWalkSpeed = PlayerStatComponent->GetWalkSpeed();
+	GetCharacterMovement()->MaxWalkSpeed = PlayerStatComponent->GetWalkSpeed();
 
-		tpsCamera->Activate();
-		fpsCamera->Deactivate();
-		
-		if (AimingCameraTimeline)
-		{
-			AimingCameraTimeline->Reverse();
-		}
-	}
-}
+	tpsCamera->Activate();
+	fpsCamera->Deactivate();
 
-void AMainCharacter::UpdateCameraTimeline(const float TimelineValue) const
-{
-	FVector CameraLocation = FMath::Lerp(TPSCameraLocation, FPSCameraLocation, TimelineValue);
-
-	cameraBoom->SocketOffset = CameraLocation;
-}
-
-void AMainCharacter::CameraTimelineEnd()
-{
-	if (bAiming)
-	{
-		fpsCamera->Activate();
-		tpsCamera->Deactivate();
-	}
-
-	if (AimingCameraTimeline->GetPlaybackPosition() != 0.0f)
-	{
-		//HUD->DisplayCrosshair();
-	}
+	InterpolateCameraRotation(fpsCamera, tpsCamera);
 }
 
 void AMainCharacter::ToggleInventory()
 {
 	HUD->ToggleInventory();
-
-	if (HUD->bIsInventoryVisible)
-	{
-		StopAiming();
-	}
 }
 
 void AMainCharacter::ToggleOtherInventory()

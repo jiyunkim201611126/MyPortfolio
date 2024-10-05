@@ -72,6 +72,7 @@ void UItemBase::Use(AMainCharacter* character)
 		case EItemType::Armor:
 			break;
 		case EItemType::Weapon:
+			character->UseItem(this);
 			break;
 		}
 

@@ -43,7 +43,8 @@ class STUDYRPG_API AMainCharacter : public ACharacter, public IInventoryOwnerInt
 	GENERATED_BODY()
 
 public:
-	bool bAiming;
+	bool bAiming = false;
+	bool bWeaponEquip = false;
 
 	// 생성자
 	AMainCharacter();
@@ -119,13 +120,9 @@ protected:
 
 	UPROPERTY(VisibleAnyWhere, Category = "Character | Camera")
 	FVector TPSCameraLocation;
+
 	UPROPERTY(VisibleAnyWhere, Category = "Character | Camera")
 	FVector FPSCameraLocation;
-
-	TObjectPtr<UTimelineComponent> AimingCameraTimeline;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Character | Aim Timeline")
-	UCurveFloat* AimingCameraCurve;
 
 	// 인풋 액션 가상함수
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -141,13 +138,11 @@ protected:
 	// 마우스 움직임을 통해 실행됨
 	void Look(const FInputActionValue& Value);
 
+	void InterpolateCameraRotation(UCameraComponent* FromCamera, UCameraComponent* ToCamera);
+
 	void Aim();
 	void Aiming();
 	void StopAiming();
-	UFUNCTION()
-	void UpdateCameraTimeline(const float TimelineValue) const;
-	UFUNCTION()
-	void CameraTimelineEnd();
 
 	void ToggleInventory();
 	void PerformInteractionCheck();

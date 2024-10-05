@@ -8,10 +8,11 @@ UCLASS()
 class STUDYRPG_API AIE_002_EquipWeapon : public AItemEffectBase
 {
 	GENERATED_BODY()
-public:
-	AIE_002_EquipWeapon();
 
+public:
 	virtual void ItemEffect(UItemBase* ItemToUse, AMainCharacter* character) override;
 
 protected:
+	UPROPERTY(EditDefaultsOnly, Category = "AminBP")
+	class TSubclassOf<UAnimInstance> WeaponAnimClass;
 };
